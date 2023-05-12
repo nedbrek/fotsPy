@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import openpyxl
+import sys
 
 ### excel utils
 def resolveFormula(sheet, cell):
@@ -55,7 +56,7 @@ def findY(map_sheet):
 
 def makeKey(grid_x, grid_y):
     dec_x = int(grid_x / 10)
-    sec_x = grid_x % 10
+    sec_x = (grid_x % 10) + 1
 
     dec_y = int(grid_y / 10)
     sec_y = grid_y % 10
@@ -77,7 +78,16 @@ def dumpStarmap(map_sheet):
             off_x = first_x * 10 + col - 3
             off_y = first_y * 10 + row - 4
 
-            print("{} {}".format(makeKey(off_x, off_y), val))
+            key = makeKey(off_x, off_y)
+            comment = cell.comment
+            if type(comment) is not openpyxl.comments.comments.Comment:
+                print("{} {}".format(key, val))
+            else:
+                comments = comment.text.split("\n")
+                com_cols = comments[0].split()
+                if key != com_cols[0]:
+                    print("Ned error", key, com_cols[0], file=sys.stderr)
+                print("{}".format(comments[0]))
 
 
 def dumpMap(wb_obj):
