@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import json
 import openpyxl
 import sys
 
@@ -19,6 +20,48 @@ def resolveFormula(sheet, cell):
 
     return v2
 
+### classes
+class System:
+    def __init__(self):
+        self.xoff = -1
+        self.yoff = -1
+        self.key = "<error>"
+        self.star_type = "<error>"
+
+class FotsData:
+    def __init__(self):
+        self.stars = list()
+
+    def buildStarmap(self, map_sheet):
+        self.first_x, last_x = findX(map_sheet)
+        self.first_y, last_y = findY(map_sheet)
+
+        # walk the map
+        for col in range(3, (last_x - self.first_x + 1) * 10):
+            for row in range(4, (last_y - self.first_y + 1) * 10):
+                cell = map_sheet.cell(row, col)
+                val = cell.value
+                if val == None:
+                    continue
+
+                s = System()
+
+                s.xoff = self.first_x * 10 + col - 3
+                s.yoff = self.first_y * 10 + row - 4
+
+                key = makeKey(s.xoff, s.yoff)
+                s.key = key
+
+                comment = cell.comment
+                if type(comment) is not openpyxl.comments.comments.Comment:
+                    s.star_type = val
+                    self.stars.append(s)
+                else:
+                    comments = comment.text.split("\n")
+                    com_cols = comments[0].split()
+                    if key != com_cols[0]:
+                        print("Ned error", key, com_cols[0], file=sys.stderr)
+                    s.star_type = com_cols[1]
 
 # find x dimensions
 def findX(map_sheet):
@@ -64,31 +107,9 @@ def makeKey(grid_x, grid_y):
     return key
 
 def dumpStarmap(map_sheet):
-    first_x, last_x = findX(map_sheet)
-    first_y, last_y = findY(map_sheet)
-
-    # walk the map
-    for col in range(3, (last_x - first_x + 1) * 10):
-        for row in range(4, (last_y - first_y + 1) * 10):
-            cell = map_sheet.cell(row, col)
-            val = cell.value
-            if val == None:
-                continue
-
-            off_x = first_x * 10 + col - 3
-            off_y = first_y * 10 + row - 4
-
-            key = makeKey(off_x, off_y)
-            comment = cell.comment
-            if type(comment) is not openpyxl.comments.comments.Comment:
-                print("{} {}".format(key, val))
-            else:
-                comments = comment.text.split("\n")
-                com_cols = comments[0].split()
-                if key != com_cols[0]:
-                    print("Ned error", key, com_cols[0], file=sys.stderr)
-                print("{}".format(comments[0]))
-
+    data = FotsData()
+    data.buildStarmap(map_sheet)
+    print(json.dumps(data, default=vars))
 
 def dumpMap(wb_obj):
     map_sheet = wb_obj["Map"]
