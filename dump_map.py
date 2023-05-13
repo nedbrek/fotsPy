@@ -21,16 +21,72 @@ def resolveFormula(sheet, cell):
     return v2
 
 ### classes
+class World:
+    def __init__(self):
+        self.type = "<error>"
+        self.rp = -1
+        self.srp = -1
+
 class System:
     def __init__(self):
         self.xoff = -1
         self.yoff = -1
         self.key = "<error>"
         self.star_type = "<error>"
+        self.worlds = list()
+        self.grid = False
 
 class FotsData:
     def __init__(self):
         self.stars = list()
+
+    def parseComments(self, s, comments):
+        last_comment = comments[-1]
+        lc_last_col = last_comment.split()
+        last_survey = -1
+        if (len(lc_last_col) > 2):
+            last_survey = int(lc_last_col[2])
+
+        for c in comments[0:-1]:
+            cols = c.split()
+            num_cols = len(cols)
+            w = World()
+
+            if num_cols == 2:
+                w.type = cols[1]
+            elif num_cols == 6:
+                w.type = cols[2]
+                w.rp = cols[3]
+                w.srp = 0
+                last_survey = cols[4]
+            else:
+                last_col = num_cols - 2
+                last_col_val = cols[last_col]
+                note = None
+                if type(last_col_val) is int or last_col_val.isdigit():
+                    last_survey = last_col_val
+                else:
+                    w.owner = last_col_val
+                    last_col = last_col - 1
+                    last_survey = cols[last_col]
+
+                last_col = last_col - 1
+
+                #num = cols[1]
+                w.type = cols[2]
+                if '.' in cols:
+                    #desc = ' '.join(cols[3:last_col])
+                    last_col = cols.index('.')
+                    last_col = last_col - 1
+                    w.srp = float(cols[last_col])
+                    last_col = last_col - 1
+                else:
+                    w.srp = 0
+
+                w.rp = cols[last_col]
+
+            s.last_survey = last_survey
+            s.worlds.append(w)
 
     def buildStarmap(self, map_sheet):
         self.first_x, last_x = findX(map_sheet)
@@ -52,16 +108,22 @@ class FotsData:
                 key = makeKey(s.xoff, s.yoff)
                 s.key = key
 
+                fill = cell.fill
+                if fill.bgColor.rgb != 'FF000000':
+                    s.grid = True
+
                 comment = cell.comment
                 if type(comment) is not openpyxl.comments.comments.Comment:
                     s.star_type = val
-                    self.stars.append(s)
                 else:
                     comments = comment.text.split("\n")
                     com_cols = comments[0].split()
                     if key != com_cols[0]:
                         print("Ned error", key, com_cols[0], file=sys.stderr)
                     s.star_type = com_cols[1]
+                    self.parseComments(s, comments[1:])
+
+                self.stars.append(s)
 
 # find x dimensions
 def findX(map_sheet):
