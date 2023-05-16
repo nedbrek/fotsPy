@@ -106,18 +106,23 @@ if __name__ == '__main__':
     with open(args.habfile[0], 'r') as hab_file:
         hab_data = json.loads(hab_file.read())["habs"]
 
-
+    # build the GUI
     root = tk.Tk()
 
-    hsb = ttk.Scrollbar(root, orient=tk.HORIZONTAL)
-    vsb = ttk.Scrollbar(root, orient=tk.VERTICAL)
+    pane = ttk.PanedWindow(root, orient='horizontal')
+    pane.pack(expand=True, fill='both')
 
-    canvas = tk.Canvas(root, yscrollcommand = vsb.set, xscrollcommand = hsb.set)
+    right_frame = ttk.Frame()
+    text = tk.Text()
 
-    first_x = data["first_x"] * 10
-    first_y = data["first_y"] * 10
+    pane.add(text)
+    pane.add(right_frame)
 
-    drawData()
+    # star map
+    hsb = ttk.Scrollbar(right_frame, orient=tk.HORIZONTAL)
+    vsb = ttk.Scrollbar(right_frame, orient=tk.VERTICAL)
+
+    canvas = tk.Canvas(right_frame, yscrollcommand = vsb.set, xscrollcommand = hsb.set)
 
     hsb['command'] = canvas.xview
     vsb['command'] = canvas.yview
@@ -131,6 +136,12 @@ if __name__ == '__main__':
     root.bind('<KP_Subtract>', zoomOut)
     root.bind('<plus>',        zoomIn)
     root.bind('<KP_Add>',      zoomIn)
+
+    # parse data
+    first_x = data["first_x"] * 10
+    first_y = data["first_y"] * 10
+
+    drawData()
 
     root.mainloop()
 
