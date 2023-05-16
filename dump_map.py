@@ -36,6 +36,28 @@ class System:
         self.worlds = list()
         self.grid = False
 
+class Habs:
+    def __init__(self):
+        self.habs = dict()
+
+    def readExcel(self, wb_obj):
+        colony_sheet = wb_obj["Colonies"]
+        row = 2
+        while 1:
+            col = 64
+            key_val = colony_sheet.cell(row, col).value
+            if key_val == None:
+                break
+
+            col = 66
+            hab_val = colony_sheet.cell(row, col).value
+            if hab_val == None:
+                print("Error in hab val, row:", row)
+                hab_val = "?"
+
+            self.habs[key_val] = hab_val
+            row = row + 1
+
 class FotsData:
     def __init__(self):
         self.stars = list()
@@ -177,13 +199,25 @@ def dumpMap(wb_obj):
     map_sheet = wb_obj["Map"]
     dumpStarmap(map_sheet)
 
+def dumpHab(wb_obj):
+    habs = Habs()
+    habs.readExcel(wb_obj)
+    print(json.dumps(habs, default=vars))
+
+
 ### main
 if __name__ == '__main__':
     import argparse
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("turnfile", nargs=1, help = "Excel turn file")
+    arg_parser.add_argument("--hab", help = "Dump hab info", action="store_true")
     args = arg_parser.parse_args()
 
     wb_obj = openpyxl.load_workbook(args.turnfile[0])
+
+    if args.hab:
+        dumpHab(wb_obj)
+        sys.exit(0)
+
     dumpMap(wb_obj)
 
