@@ -1,9 +1,18 @@
 #!/usr/bin/env python3
 
+from enum import Enum, auto
 import json
 import tkinter as tk
 from tkinter import ttk
 
+###
+class EHabs(Enum):
+    NO_HABS   = auto()  # nothing worth colonizing
+    ALL_HABS  = auto()  # all habitable worlds colonized
+    GOOD_HABS = auto()  # good colony site
+    BAD_HABS  = auto()  # marginal colony site
+
+###
 zoom_levels = [
    10,
    20,
@@ -14,14 +23,19 @@ zoom_levels = [
 ]
 
 data = dict()
-side = 10
+hab_data = dict()
+side = 10 # length of the side of a square
 canvas = None
 first_x = 0
 first_y = 0
 
 def drawData():
+    global data
+    global hab_data
     global side
     global canvas
+    global first_x
+    global first_y
 
     canvas.delete('all')
 
@@ -36,7 +50,25 @@ def drawData():
 
         if side >= 40:
             star_type = s["star_type"]
-            canvas.create_text(x + side / 2, y + side / 2, text=star_type, fill='white')
+            fill_color = 'grey'
+
+            if 'last_survey' in s:
+                state = EHabs.NO_HABS
+                for w in s["worlds"]:
+                    hab = hab_data[w["type"]]
+                    own = 'owner' in w
+                    if own:
+                        # TODO show room for expansion
+                        state = EHabs.ALL_HABS
+                        fill_color = 'white'
+                    elif state == EHabs.NO_HABS and (hab == 'M' or hab == 'N'):
+                        state = EHabs.GOOD_HABS
+                        fill_color = '#00C000'
+                    elif state == EHabs.NO_HABS and hab == 'P':
+                        state = EHabs.BAD_HABS
+                        fill_color = 'red'
+
+            canvas.create_text(x + side / 2, y + side / 2, text=star_type, fill=fill_color)
 
     canvas.configure(scrollregion = canvas.bbox('all'))
 
@@ -65,13 +97,15 @@ if __name__ == '__main__':
     import argparse
     arg_parser = argparse.ArgumentParser()
     arg_parser.add_argument("turnfile", nargs=1, help = "JSON turn file")
+    arg_parser.add_argument("habfile", nargs=1, help = "JSON hab file")
     args = arg_parser.parse_args()
 
     with open(args.turnfile[0], 'r') as turn_file:
         data = json.loads(turn_file.read())
 
-    # length of the side of a square
-    print(data.keys())
+    with open(args.habfile[0], 'r') as hab_file:
+        hab_data = json.loads(hab_file.read())["habs"]
+
 
     root = tk.Tk()
 
