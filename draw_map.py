@@ -2,6 +2,7 @@
 
 from enum import Enum, auto
 import json
+import re
 import tkinter as tk
 from tkinter import ttk
 
@@ -28,6 +29,17 @@ side = 10 # length of the side of a square
 canvas = None
 first_x = 0
 first_y = 0
+text = None
+
+def selectStar(event):
+    tags = canvas.gettags('current')
+    regex = re.compile("key_(.*)")
+    for t in tags:
+        m = regex.match(t)
+    tag = list(filter(regex.match, tags))
+    key = regex.match(tag[0]).group(1)
+
+    text.insert('end', f"Click {key}\n")
 
 def drawData():
     global data
@@ -46,7 +58,10 @@ def drawData():
         fill_color = 'black'
         if s["grid"]:
             fill_color = 'dark blue'
-        canvas.create_rectangle(x, y, x + side, y + side, fill=fill_color)
+
+        key = "key_{}".format(s['key'])
+        tags = [key, 'star']
+        item_id = canvas.create_rectangle(x, y, x + side, y + side, fill=fill_color, tags=tags)
 
         if side >= 40:
             star_type = s["star_type"]
@@ -67,10 +82,16 @@ def drawData():
                     elif state == EHabs.NO_HABS and hab == 'P':
                         state = EHabs.BAD_HABS
                         fill_color = 'red'
+                #foreach world
+            #if survey data
 
-            canvas.create_text(x + side / 2, y + side / 2, text=star_type, fill=fill_color)
+            canvas.create_text(x + side / 2, y + side / 2, text=star_type, fill=fill_color, tags=tags)
+        #if text is visible
+    #foreach star
 
     canvas.configure(scrollregion = canvas.bbox('all'))
+    canvas.tag_bind('star', "<1>", selectStar)
+#def drawData
 
 def zoomOut(event):
     global side
