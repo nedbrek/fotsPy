@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
 
 from enum import Enum, auto
+import fots_lib as fots
 import json
+import openpyxl
 import re
+import sqlite3
+import sys
 import tkinter as tk
 from tkinter import ttk
+from tkinter import filedialog
 
-###
+### types
+## State machine for system classification
 class EHabs(Enum):
     NO_HABS   = auto()  # nothing worth colonizing
     ALL_HABS  = auto()  # all habitable worlds colonized
     GOOD_HABS = auto()  # good colony site
     BAD_HABS  = auto()  # marginal colony site
 
-###
+### globals
+## grid size (pixels)
+side = 10 # length of the side of a square
 zoom_levels = [
    10,
    20,
@@ -23,15 +31,14 @@ zoom_levels = [
    150
 ]
 
-data = dict()
+data = None
 hab_data = dict()
-side = 10 # length of the side of a square
 canvas = None
-first_x = 0
-first_y = 0
 text = None
 
-def selectStar(event):
+### functions
+def selectStar(event) -> None:
+    """ Respond to click on a system """
     tags = canvas.gettags('current')
     regex = re.compile("key_(.*)")
     for t in tags:
@@ -41,37 +48,48 @@ def selectStar(event):
 
     text.insert('end', f"Click {key}\n")
 
-def drawData():
+def drawDb() -> None:
+    """ Read the database and draw it """
+    #{
+    global canvas
+    global cur
     global data
     global hab_data
     global side
-    global canvas
-    global first_x
-    global first_y
 
     canvas.delete('all')
 
-    for s in data["stars"]:
-        x = (s["xoff"] - first_x) * side
-        y = (s["yoff"] - first_y) * side
-        t = s["star_type"]
+    first_x = int(getDbVal(cur, "first_x"))
+    first_y = int(getDbVal(cur, "first_y"))
+
+    # TODO pull data from db
+    stars = cur.execute('SELECT gridx, gridy, type FROM starmap').fetchall()
+    for row in stars:
+        xoff = row[0]
+        yoff = row[1]
+        x = (xoff - first_x) * side
+        y = (yoff - first_y) * side
+        star_type = row[2]
+
         fill_color = 'black'
-        if s["grid"]:
+        grid_res = cur.execute('SELECT turn FROM comm_grid WHERE gridx=? AND gridy=?', (xoff, yoff)).fetchone()
+        if grid_res is not None:
             fill_color = 'dark blue'
 
-        key = "key_{}".format(s['key'])
+        key = "key_{}".format(fots.Fots.makeKey(xoff, yoff))
         tags = [key, 'star']
         item_id = canvas.create_rectangle(x, y, x + side, y + side, fill=fill_color, tags=tags)
 
+        # TODO db doesn't have star last survey...
         if side >= 40:
-            star_type = s["star_type"]
             fill_color = 'grey'
 
-            if 'last_survey' in s:
+            # hasattr(s, 'last_survey'):
+            if False:
                 state = EHabs.NO_HABS
-                for w in s["worlds"]:
-                    hab = hab_data[w["type"]]
-                    own = 'owner' in w
+                for w in s.worlds:
+                    hab = hab_data[w.type]
+                    own = hasattr(w, 'owner')
                     if own:
                         # TODO show room for expansion
                         state = EHabs.ALL_HABS
@@ -91,9 +109,10 @@ def drawData():
 
     canvas.configure(scrollregion = canvas.bbox('all'))
     canvas.tag_bind('star', "<1>", selectStar)
-#def drawData
+#}def drawDb
 
-def zoomOut(event):
+def zoomOut(event) -> None:
+    """ Reduce zoom level and redraw """
     global side
     global zoom_levels
 
@@ -101,9 +120,10 @@ def zoomOut(event):
     if idx == 0:
         return
     side = zoom_levels[idx - 1]
-    drawData()
+    drawDb()
 
-def zoomIn(event):
+def zoomIn(event) -> None:
+    """ Increase zoom level and redraw """
     global side
     global zoom_levels
 
@@ -111,25 +131,233 @@ def zoomIn(event):
     if idx + 1 == len(zoom_levels):
         return
     side = zoom_levels[idx + 1]
-    drawData()
+    drawDb()
+
+### db functions
+def insertHabs(cur, habs) -> None:
+    """ Insert the key/value pairs from 'habs' (dict) into the database cursor 'cur' """
+    for key, val in habs.habs.items():
+        cur.execute("""
+            INSERT OR REPLACE INTO hab_data(key, val)
+            VALUES(?, ?)
+        """, (key, val))
+
+def insertStarmap(cur, data):
+    """ Insert the values from 'habs' (list) into the database cursor 'cur' """
+    for star in data.stars:
+        cur.execute("""
+            INSERT INTO starmap(gridx, gridy, type)
+            VALUES (?, ?, ?)
+        """, (star.xoff, star.yoff, star.star_type))
+
+def buildDb(cur):
+    """ Create initial database tables """
+    cur.executescript("""
+        CREATE TABLE settings(
+            version INTEGER
+        );
+        CREATE TABLE starmap(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gridx INTEGER not null,
+            gridy INTEGER not null,
+            type TEXT not null
+        );
+        CREATE TABLE hab_data(
+            key TEXT PRIMARY KEY,
+            val TEXT not null
+        );
+        CREATE TABLE surveys(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key TEXT not null,
+            num INTEGER not null,
+            type TEXT not null,
+            rp INTEGER not null,
+            srp INTEGER not null,
+            owner TEXT not null,
+            turn INTEGER not null
+        );
+        CREATE TABLE comm_grid(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            gridx INTEGER not null,
+            gridy INTEGER not null,
+            turn INTEGER not null
+        );
+        CREATE TABLE notes(
+            key TEXT PRIMARY KEY,
+            val TEXT not NULL
+        )
+    """)
+
+    cur.execute("""
+        INSERT INTO settings(version) VALUES(1)
+    """)
+
+def addExcel() -> None:
+    """ Ask user for an Excel file to read into the db """
+    global cur
+
+    filename = filedialog.askopenfilename()
+    if not filename:
+        return
+
+    wb_obj = openpyxl.load_workbook(filename)
+
+    map_sheet = wb_obj["Map"]
+    data = fots.Fots()
+    data.buildStarmap(map_sheet)
+
+    summary_sheet = wb_obj["Summary"]
+    row = 7
+    col = 12
+    turn = summary_sheet.cell(row, col)
+
+    insertSurveys(cur, data, turn)
+    drawDb()
+
+def insertSurveys(cur, data, turn) -> None:
+    """ Insert the planet data into the database cursor """
+    for star in data.stars:
+        if not hasattr(star, "last_survey") or star.last_survey != turn:
+            continue
+
+        if star.grid:
+            cur.execute("""
+                INSERT INTO comm_grid(gridx, gridy, turn)
+                VALUES(?, ?, ?)
+            """, (star.xoff, star.yoff, turn))
+
+        world_num = 1
+        for w in star.worlds:
+            owner = ""
+            if hasattr(w, "owner"):
+                owner = w.owner
+
+            cur.execute("""
+                INSERT INTO surveys(key, num, type, rp, srp, owner, turn)
+                VALUES(?, ?, ?, ?, ?, ?)
+            """, (star.key, world_num, w.type, w.rp, w.srp, owner, turn))
+
+            world_num = world_num + 1
+
+def getDbVal(cur, key):
+    res = cur.execute('SELECT val FROM notes WHERE key=?', (key,))
+    t = res.fetchone()
+    if t is None:
+        return None
+    return t[0]
+
+def findSystem(stars, key):
+    for s in stars:
+        if fots.Fots.makeKey(s.xoff, s.yoff) == key:
+            return s
+    return None
+
+def tempCode():
+    for row in cur.execute('SELECT key, type, rp, srp, owner, turn FROM surveys'):
+        s = findSystem(data.stars, row[0])
+        w = fots.World()
+        w.type  = row[1]
+        w.rp    = row[2]
+        w.srp   = row[3]
+        w.owner = row[4]
+        w.last_survey = row[5]
+
+        s.worlds.append(w)
+
+def fillFots(cur):
+#{
+    global data
+    global hab_data
+
+    data = fots.Fots()
+
+    # pull habs
+    hab_data = fots.Habs()
+    for row in cur.execute('SELECT key, val FROM hab_data'):
+        hab_data.habs[row[0]] = row[1]
+#}
+
+def openDb():
+    filename = filedialog.askopenfilename()
+    if not filename:
+        return
+
+    conn = sqlite3.connect(filename)
+    global cur
+    cur = conn.cursor()
+    fillFots(cur)
+
+    drawDb()
+
+def newDb():
+    filename = filedialog.asksaveasfilename()
+    if not filename:
+        return
+
+    excel_file = filedialog.askopenfilename()
+    if not excel_file:
+        return
+
+    global cur
+    conn = sqlite3.connect(filename)
+    cur = conn.cursor()
+
+    wb_obj = openpyxl.load_workbook(excel_file)
+
+    map_sheet = wb_obj["Map"]
+    global data
+    data = fots.Fots()
+    data.buildStarmap(map_sheet)
+
+    buildDb(cur)
+    conn.commit()
+
+    # the argument to insert must be a tuple
+    cur.execute("INSERT INTO notes VALUES('first_x', ?)", (data.first_x,))
+    cur.execute("INSERT INTO notes VALUES('first_y', ?)", (data.first_y,))
+    conn.commit()
+
+    insertStarmap(cur, data)
+    conn.commit()
+
+    habs = fots.Habs()
+    habs.readExcel(wb_obj)
+    insertHabs(cur, habs)
+    conn.commit()
+
+    summary_sheet = wb_obj["Summary"]
+    row = 7
+    col = 12
+    turn = summary_sheet.cell(row, col).value
+
+    insertSurveys(cur, data, turn)
+
+    drawDb()
 
 ### main
 if __name__ == '__main__':
     import argparse
     arg_parser = argparse.ArgumentParser()
-    arg_parser.add_argument("turnfile", nargs=1, help = "JSON turn file")
-    arg_parser.add_argument("habfile", nargs=1, help = "JSON hab file")
+    # TODO add param for db and excel
     args = arg_parser.parse_args()
-
-    with open(args.turnfile[0], 'r') as turn_file:
-        data = json.loads(turn_file.read())
-
-    with open(args.habfile[0], 'r') as hab_file:
-        hab_data = json.loads(hab_file.read())["habs"]
 
     # build the GUI
     root = tk.Tk()
+    root.option_add('*tearOff', False)
 
+    ## menu bar
+    menubar = tk.Menu(root)
+    root['menu'] = menubar
+
+    ### file menu
+    menu_file = tk.Menu(menubar)
+    menubar.add_cascade(menu=menu_file, label='File')
+    menu_file.add_command(label='New', command=newDb)
+    menu_file.add_command(label='Open', command=openDb)
+    menu_file.add_command(label='Add Report', command=addExcel)
+    menu_file.add_command(label='Exit', command=sys.exit)
+
+    ## gui elements
     pane = ttk.PanedWindow(root, orient='horizontal')
     pane.pack(expand=True, fill='both')
 
@@ -157,12 +385,6 @@ if __name__ == '__main__':
     root.bind('<KP_Subtract>', zoomOut)
     root.bind('<plus>',        zoomIn)
     root.bind('<KP_Add>',      zoomIn)
-
-    # parse data
-    first_x = data["first_x"] * 10
-    first_y = data["first_y"] * 10
-
-    drawData()
 
     root.mainloop()
 
