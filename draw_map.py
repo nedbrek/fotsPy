@@ -209,7 +209,7 @@ def addExcel() -> None:
     summary_sheet = wb_obj["Summary"]
     row = 7
     col = 12
-    turn = summary_sheet.cell(row, col)
+    turn = summary_sheet.cell(row, col).value
 
     insertSurveys(cur, data, turn)
     drawDb()
