@@ -120,17 +120,17 @@ class Fots:
                 w.type = cols[2]
                 w.rp = cols[3]
                 w.srp = 0
-                last_survey = cols[4]
+                last_survey = int(cols[4])
             else:
                 last_col = num_cols - 2
                 last_col_val = cols[last_col]
                 note = None
                 if type(last_col_val) is int or last_col_val.isdigit():
-                    last_survey = last_col_val
+                    last_survey = int(last_col_val)
                 else:
                     w.owner = last_col_val
                     last_col = last_col - 1
-                    last_survey = cols[last_col]
+                    last_survey = int(cols[last_col])
 
                 last_col = last_col - 1
 
@@ -181,7 +181,7 @@ class Fots:
                     comments = comment.text.split("\n")
                     com_cols = comments[0].split()
                     if key != com_cols[0]:
-                        print("Ned error", key, com_cols[0], file=sys.stderr)
+                        print("Ned error ", key, com_cols[0], file=sys.stderr)
                     s.star_type = com_cols[1]
                     self.parseComments(s, comments[1:])
 

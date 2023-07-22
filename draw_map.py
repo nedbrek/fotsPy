@@ -216,8 +216,10 @@ def addExcel() -> None:
 
 def insertSurveys(cur, data, turn) -> None:
     """ Insert the planet data into the database cursor """
+    # surveys are tagged with the previous turn (except turn 0)
+    expect_turn = 0 if turn == 0 else turn - 1
     for star in data.stars:
-        if not hasattr(star, "last_survey") or star.last_survey != turn:
+        if not hasattr(star, "last_survey") or star.last_survey != expect_turn:
             continue
 
         if star.grid:
@@ -234,7 +236,7 @@ def insertSurveys(cur, data, turn) -> None:
 
             cur.execute("""
                 INSERT INTO surveys(key, num, type, rp, srp, owner, turn)
-                VALUES(?, ?, ?, ?, ?, ?)
+                VALUES(?, ?, ?, ?, ?, ?, ?)
             """, (star.key, world_num, w.type, w.rp, w.srp, owner, turn))
 
             world_num = world_num + 1
