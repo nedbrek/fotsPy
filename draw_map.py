@@ -52,13 +52,14 @@ def drawDb() -> None:
     """ Read the database and draw it """
     #{
     global canvas
-    global cur
+    global conn
     global data
     global hab_data
     global side
 
     canvas.delete('all')
 
+    cur = conn.cursor()
     first_x = int(getDbVal(cur, "first_x"))
     first_y = int(getDbVal(cur, "first_y"))
 
@@ -134,24 +135,29 @@ def zoomIn(event) -> None:
     drawDb()
 
 ### db functions
-def insertHabs(cur, habs) -> None:
+def insertHabs(conn, habs) -> None:
     """ Insert the key/value pairs from 'habs' (dict) into the database cursor 'cur' """
+    cur = conn.cursor()
     for key, val in habs.habs.items():
         cur.execute("""
             INSERT OR REPLACE INTO hab_data(key, val)
             VALUES(?, ?)
         """, (key, val))
+    conn.commit()
 
-def insertStarmap(cur, data):
+def insertStarmap(conn, data):
     """ Insert the values from 'habs' (list) into the database cursor 'cur' """
+    cur = conn.cursor()
     for star in data.stars:
         cur.execute("""
             INSERT INTO starmap(gridx, gridy, type)
             VALUES (?, ?, ?)
         """, (star.xoff, star.yoff, star.star_type))
+    conn.commit()
 
-def buildDb(cur):
+def buildDb(conn):
     """ Create initial database tables """
+    cur = conn.cursor()
     cur.executescript("""
         CREATE TABLE settings(
             version INTEGER
@@ -191,10 +197,12 @@ def buildDb(cur):
     cur.execute("""
         INSERT INTO settings(version) VALUES(1)
     """)
+    conn.commit()
 
-def addExcel() -> None:
+def addExcel(root) -> None:
     """ Ask user for an Excel file to read into the db """
-    global cur
+    #{
+    global conn
 
     filename = filedialog.askopenfilename()
     if not filename:
@@ -211,11 +219,16 @@ def addExcel() -> None:
     col = 12
     turn = summary_sheet.cell(row, col).value
 
-    insertSurveys(cur, data, turn)
-    drawDb()
+    insertSurveys(conn, data, turn)
 
-def insertSurveys(cur, data, turn) -> None:
+    drawDb()
+    # TODO pull database name
+    root.winfo_toplevel().title("Fots turn {}".format(turn))
+    #}
+
+def insertSurveys(conn, data, turn) -> None:
     """ Insert the planet data into the database cursor """
+    cur = conn.cursor()
     # surveys are tagged with the previous turn (except turn 0)
     expect_turn = 0 if turn == 0 else turn - 1
     for star in data.stars:
@@ -240,9 +253,10 @@ def insertSurveys(cur, data, turn) -> None:
             """, (star.key, world_num, w.type, w.rp, w.srp, owner, turn))
 
             world_num = world_num + 1
+    conn.commit()
 
-def getDbVal(cur, key):
-    res = cur.execute('SELECT val FROM notes WHERE key=?', (key,))
+def getDbVal(cur, key, col="val", table="notes"):
+    res = cur.execute("SELECT {} FROM {} WHERE key=?".format(col, table), (key,))
     t = res.fetchone()
     if t is None:
         return None
@@ -279,19 +293,27 @@ def fillFots(cur):
         hab_data.habs[row[0]] = row[1]
 #}
 
-def openDb():
+def openDb(root):
+    """ Open an existing database """
+    #{
     filename = filedialog.askopenfilename()
     if not filename:
         return
 
+    global conn
     conn = sqlite3.connect(filename)
-    global cur
     cur = conn.cursor()
     fillFots(cur)
 
     drawDb()
+    res = cur.execute("SELECT MAX(turn) FROM comm_grid").fetchone()
+    turn = "<no surveys>" if res is None else res[0]
+    root.winfo_toplevel().title("Fots {} turn {}".format(filename, turn))
+    #}
 
-def newDb():
+def newDb(root):
+    """ Create a database and load an Excel turn """
+    #{
     filename = filedialog.asksaveasfilename()
     if not filename:
         return
@@ -300,7 +322,7 @@ def newDb():
     if not excel_file:
         return
 
-    global cur
+    global conn
     conn = sqlite3.connect(filename)
     cur = conn.cursor()
 
@@ -311,30 +333,29 @@ def newDb():
     data = fots.Fots()
     data.buildStarmap(map_sheet)
 
-    buildDb(cur)
-    conn.commit()
+    buildDb(conn)
 
     # the argument to insert must be a tuple
     cur.execute("INSERT INTO notes VALUES('first_x', ?)", (data.first_x,))
     cur.execute("INSERT INTO notes VALUES('first_y', ?)", (data.first_y,))
     conn.commit()
 
-    insertStarmap(cur, data)
-    conn.commit()
+    insertStarmap(conn, data)
 
     habs = fots.Habs()
     habs.readExcel(wb_obj)
-    insertHabs(cur, habs)
-    conn.commit()
+    insertHabs(conn, habs)
 
     summary_sheet = wb_obj["Summary"]
     row = 7
     col = 12
     turn = summary_sheet.cell(row, col).value
 
-    insertSurveys(cur, data, turn)
+    insertSurveys(conn, data, turn)
 
     drawDb()
+    root.winfo_toplevel().title("Fots {} turn {}".format(filename, turn))
+    #}
 
 ### main
 if __name__ == '__main__':
@@ -347,6 +368,8 @@ if __name__ == '__main__':
     root = tk.Tk()
     root.option_add('*tearOff', False)
 
+    root.winfo_toplevel().title("Fots - <no db loaded>")
+
     ## menu bar
     menubar = tk.Menu(root)
     root['menu'] = menubar
@@ -354,9 +377,9 @@ if __name__ == '__main__':
     ### file menu
     menu_file = tk.Menu(menubar)
     menubar.add_cascade(menu=menu_file, label='File')
-    menu_file.add_command(label='New', command=newDb)
-    menu_file.add_command(label='Open', command=openDb)
-    menu_file.add_command(label='Add Report', command=addExcel)
+    menu_file.add_command(label='New', command=lambda: newDb(root))
+    menu_file.add_command(label='Open', command=lambda: openDb(root))
+    menu_file.add_command(label='Add Report', command=lambda: addExcel(root))
     menu_file.add_command(label='Exit', command=sys.exit)
 
     ## gui elements
