@@ -46,7 +46,41 @@ def selectStar(event) -> None:
     tag = list(filter(regex.match, tags))
     key = regex.match(tag[0]).group(1)
 
-    text.insert('end', f"Click {key}\n")
+    global conn
+    cur = conn.cursor()
+
+    global system_tree
+    for s in system_tree.get_children(''):
+        system_tree.delete(s)
+
+    sys = system_tree.insert('', 'end', text=key)
+    system_tree.item(sys, open=True)
+
+    res = cur.execute("""SELECT
+        num, type, rp, srp, owner, turn
+        FROM surveys a
+        WHERE key=? AND turn=(
+            SELECT max(turn) FROM surveys
+            WHERE key=? AND num=a.num
+        )
+        ORDER BY num
+    """, (key, key)).fetchall()
+    for v in res:
+        num = v[0]
+        wtype = v[1]
+        rp = v[2]
+        srp = v[3]
+        owner = v[4]
+        turn = v[5]
+
+        if srp == 0:
+            srp = ''
+
+        hab = cur.execute("SELECT val FROM hab_data WHERE key=?", (wtype,)).fetchone()[0]
+
+        system_tree.insert(sys, 'end', text=num, values=(hab, rp, srp, owner, turn))
+
+    #text.insert('end', f"Click {key}\n")
 
 def drawDb() -> None:
     """ Read the database and draw it """
@@ -387,9 +421,23 @@ if __name__ == '__main__':
     pane.pack(expand=True, fill='both')
 
     right_frame = ttk.Frame()
-    text = tk.Text()
 
-    pane.add(text)
+    left_pane = ttk.PanedWindow(root, orient='vertical', width=385)
+
+    system_tree = ttk.Treeview()
+    system_tree['columns'] = ('hab', 'rp', 'srp', 'owner', 'turn')
+    system_tree.column('#0', width=95)
+    system_tree.column('hab', width=15)
+    system_tree.column('rp', width=65)
+    system_tree.column('srp', width=55)
+    system_tree.column('owner', width=60)
+    system_tree.column('turn', width=35)
+    left_pane.add(system_tree)
+
+    text = tk.Text()
+    left_pane.add(text)
+
+    pane.add(left_pane)
     pane.add(right_frame)
 
     # star map
