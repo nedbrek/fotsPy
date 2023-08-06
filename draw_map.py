@@ -11,6 +11,23 @@ import tkinter as tk
 from tkinter import ttk
 from tkinter import filedialog
 
+def copySysTree(event):
+#{
+    w = event.widget
+    root.clipboard_clear()
+    items = w.selection()
+    for i in items:
+        parent = w.parent(i)
+        if parent == '':
+            root.clipboard_append(w.item(i, 'text'))
+            continue
+
+        system = w.item(parent, 'text')
+        pnum = w.item(i, 'text')
+        vals = w.item(i, 'values')
+        root.clipboard_append("{} #{:02d}\t{}\n".format(system, pnum, '\t'.join(vals)))
+#}
+
 ### types
 ## State machine for system classification
 class EHabs(Enum):
@@ -452,6 +469,8 @@ if __name__ == '__main__':
     hsb.pack(fill='x', side='bottom')
     vsb.pack(fill='y', side='right')
     canvas.pack(expand=True, fill='both', side='right')
+
+    system_tree.bind('<Control-c>', copySysTree)
 
     # bind zoom
     root.bind('<minus>',       zoomOut)
