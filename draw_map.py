@@ -124,9 +124,9 @@ def drawDb() -> None:
         star_type = row[2]
 
         fill_color = 'black'
-        grid_res = cur.execute('SELECT turn FROM comm_grid WHERE gridx=? AND gridy=?', (xoff, yoff)).fetchone()
+        grid_res = cur.execute('SELECT color FROM comm_grid WHERE gridx=? AND gridy=?', (xoff, yoff)).fetchone()
         if grid_res is not None:
-            fill_color = 'dark blue'
+            fill_color = "#{}".format(grid_res[0][2:])
 
         key = "key_{}".format(fots.Fots.makeKey(xoff, yoff))
         tags = [key, 'star']
@@ -237,6 +237,7 @@ def buildDb(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             gridx INTEGER not null,
             gridy INTEGER not null,
+            color TEXT not null,
             turn INTEGER not null
         );
         CREATE TABLE notes(
@@ -283,17 +284,19 @@ def insertSurveys(conn, data, turn) -> None:
     # surveys are tagged with the previous turn (except turn 0)
     expect_turn = 0 if turn == 0 else turn - 1
     for star in data.stars:
+    #{
         if not hasattr(star, "last_survey") or star.last_survey != expect_turn:
             continue
 
         if star.grid:
             cur.execute("""
-                INSERT INTO comm_grid(gridx, gridy, turn)
-                VALUES(?, ?, ?)
-            """, (star.xoff, star.yoff, turn))
+                INSERT INTO comm_grid(gridx, gridy, color, turn)
+                VALUES(?, ?, ?, ?)
+            """, (star.xoff, star.yoff, star.grid, turn))
 
         world_num = 1
         for w in star.worlds:
+        #{
             owner = ""
             if hasattr(w, "owner"):
                 owner = w.owner
@@ -304,6 +307,8 @@ def insertSurveys(conn, data, turn) -> None:
             """, (star.key, world_num, w.type, w.rp, w.srp, owner, turn))
 
             world_num = world_num + 1
+        #} for world
+    #} for star
     conn.commit()
 
 def getDbVal(cur, key, col="val", table="notes"):

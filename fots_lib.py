@@ -36,7 +36,7 @@ class System:
         self.key = "<error>"
         self.star_type = "<error>"
         self.worlds = list()
-        self.grid = False
+        self.grid = None
 
 class Habs:
     def __init__(self):
@@ -236,18 +236,18 @@ class Fots:
 
                     #desc = ' '.join(cols[3:last_col])
                     last_col = cols.index('Special:') - 2
-                    w.srp = float(cols[last_col])
+                    w.srp = float(cols[i+1])
                     last_col = last_col - 1
                 else:
                     regex = re.compile("Naturally")
                     if (regex.search(c)):
                         last_col = cols.index('Naturally') - 1
-                        w.srp = float(cols[last_col])
+                        w.srp = float(cols[i+1])
                         last_col = last_col - 1
                     else:
                         w.srp = 0
 
-                w.rp = int(cols[last_col])
+                w.rp = int(cols[i])
 
                 if i != last_col:
                     print("Ned4 {} {} {} {} '{}'".format(s.key, i, last_col, w.rp, c))
@@ -280,9 +280,7 @@ class Fots:
                 key = Fots.makeKey(s.xoff, s.yoff)
                 s.key = key
 
-                fill = cell.fill
-                if fill.bgColor.rgb != 'FF000000':
-                    s.grid = True
+                s.grid = cell.fill.start_color.index
 
                 comment = cell.comment
                 if type(comment) is not openpyxl.comments.comments.Comment:
