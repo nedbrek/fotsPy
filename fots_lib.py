@@ -9,6 +9,26 @@ class World:
         self.rp = -1
         self.srp = -1
 
+def compareWorlds(key, w1, w2):
+    if w1.type != w2.type:
+        print("Type mismatch {} {} {}".format(key, w1.type, w2.type))
+
+    if w1.rp != w2.rp:
+        print("RP mismatch {} {} {}".format(key, w1.rp, w2.rp))
+
+    if w1.srp != w2.srp:
+        print("SRP mismatch {} {} {}".format(key, w1.srp, w2.srp))
+
+    return # TODO check owner once we resolve the formula
+    if hasattr(w1, 'owner'):
+        if hasattr(w2, 'owner'):
+            if w1.owner != w2.owner:
+                print("Owner mismatch {} {} {}".format(key, w1.owner, w2.owner))
+        else:
+            print("Owner2 missing {} {}".format(key, w1.owner))
+    elif hasattr(w2, 'owner'):
+        print("Owner1 missing {} {}".format(key, w2.owner))
+
 class System:
     def __init__(self):
         self.xoff = -1
@@ -111,6 +131,7 @@ class Fots:
             last_survey = int(lc_last_col[2])
 
         for c in comments:
+        #{
             regex = re.compile("Special: Wormhole")
             if regex.search(c):
                 # TODO log wormhole
@@ -133,16 +154,17 @@ class Fots:
                 #print("NedS {} '{}'".format(s.key, c))
                 continue
 
-            w = World()
-
             num_cols = len(cols)
             if num_cols == 2:
-                w.type = cols[1]
                 print("NedC2 {} '{}'".format(s.key, c))
-            elif num_cols == 6:
-                #num = cols[1]
+                continue
+
+            w = World()
+
+            if num_cols == 6:
+                w.pnum = int(cols[1][1:])
                 w.type = cols[2]
-                w.rp = cols[3]
+                w.rp = int(cols[3])
                 w.srp = 0
                 last_survey = int(cols[4])
                 if cols[5] != "!":
@@ -150,7 +172,7 @@ class Fots:
             else:
             #{
                 #print("Ned {} '{}'".format(s.key, c))
-                #num = cols[1]
+                w.pnum = int(cols[1][1:])
                 w.type = cols[2]
 
                 # parse planet tags
@@ -225,7 +247,7 @@ class Fots:
                     else:
                         w.srp = 0
 
-                w.rp = cols[last_col]
+                w.rp = int(cols[last_col])
 
                 if i != last_col:
                     print("Ned4 {} {} {} {} '{}'".format(s.key, i, last_col, w.rp, c))
@@ -233,6 +255,9 @@ class Fots:
 
             s.last_survey = last_survey
             s.worlds.append(w)
+        #} # foreach line in comments
+        # make sure worlds are in pnum order
+        s.worlds.sort(key=lambda x:x.pnum)
 
     def buildStarmap(self, map_sheet):
         self.first_x, last_x = Fots.findX(map_sheet)
@@ -240,6 +265,7 @@ class Fots:
 
         # walk the map
         for col in range(3, (last_x - self.first_x + 1) * 10):
+        #{
             for row in range(4, (last_y - self.first_y + 1) * 10):
                 cell = map_sheet.cell(row, col)
                 val = cell.value
@@ -270,4 +296,64 @@ class Fots:
                     self.parseComments(s, comments)
 
                 self.stars.append(s)
+        #}
+
+    def checkSurveys(self, survey_sheet):
+        """ check starmap built from comments against survey data """
+        # build map from key to system
+        starmap = dict()
+        for s in self.stars:
+            starmap[s.key] = s
+
+        # find first system
+        row = 4
+        key_col = 2
+        key_val = survey_sheet.cell(row, key_col).value
+        while key_val == None:
+            row = row + 1
+            key_val = survey_sheet.cell(row, key_col).value
+
+        pnum_col = 3
+        hab_col = 4
+        #tag_col = 5
+        rp_col = 6
+        srp_col = 7
+        ssrp_col = 8
+        own_col = 16
+        while key_val != None:
+            pnum_val = survey_sheet.cell(row, pnum_col).value
+            if pnum_val is not None and (type(pnum_val) is int or pnum_val.isdigit()):
+                # check survey
+                sys_key = key_val.split()[0]
+                if sys_key in starmap:
+                    s = starmap[sys_key]
+                    pnum = int(pnum_val) - 1
+                    if len(s.worlds) > pnum:
+                        tmp_w = World()
+                        tmp_w.type = survey_sheet.cell(row, hab_col).value
+                        tmp_w.rp = int(survey_sheet.cell(row, rp_col).value)
+
+                        tmp_w.srp = 0
+                        srp_val = survey_sheet.cell(row, srp_col).value
+                        if srp_val is not None:
+                            tmp_w.srp = float(srp_val)
+
+                        ssrp_val = survey_sheet.cell(row, ssrp_col).value
+                        if ssrp_val is not None:
+                            tmp_w.srp = tmp_w.srp + float(ssrp_val)
+
+                        # TODO resolve owner formula
+                        #own_val = survey_sheet.cell(row, own_col).value
+                        #if own_val is not None:
+                            #tmp_w.owner = own_val
+
+                        compareWorlds(key_val, s.worlds[pnum], tmp_w)
+                    else:
+                        print("Planet out of range {} {}".format(key_val, pnum))
+                        s.worlds.append(tmp_w)
+                else:
+                    print("Not found {}".format(key_val))
+
+            row = row + 1
+            key_val = survey_sheet.cell(row, key_col).value
 

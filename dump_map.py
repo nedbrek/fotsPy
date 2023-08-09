@@ -39,5 +39,9 @@ if __name__ == '__main__':
     map_sheet = wb_obj["Map"]
     data = fots.Fots()
     data.buildStarmap(map_sheet)
+
+    survey_sheet = wb_obj["Surveys"]
+    data.checkSurveys(survey_sheet)
+
     print(json.dumps(data, default=vars), file=outfile)
 
