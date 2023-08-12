@@ -56,19 +56,28 @@ text = None
 ### functions
 def selectStar(event) -> None:
     """ Respond to click on a system """
+    #{
+    global canvas
     tags = canvas.gettags('current')
     regex = re.compile("key_(.*)")
-    for t in tags:
-        m = regex.match(t)
     tag = list(filter(regex.match, tags))
     key = regex.match(tag[0]).group(1)
+    base_tag = "key_{}".format(key)
 
-    global conn
-    cur = conn.cursor()
-
+    # delete old info
     global system_tree
     for s in system_tree.get_children(''):
         system_tree.delete(s)
+
+    # restore border on old
+    canvas.itemconfigure('active', outline='black', width=1)
+    canvas.dtag('active')
+
+    canvas.addtag('active', 'withtag', base_tag)
+    canvas.itemconfigure('active', outline='red', width=3)
+
+    global conn
+    cur = conn.cursor()
 
     sys = system_tree.insert('', 'end', text=key)
     system_tree.item(sys, open=True)
@@ -96,8 +105,8 @@ def selectStar(event) -> None:
         hab = cur.execute("SELECT val FROM hab_data WHERE key=?", (wtype,)).fetchone()[0]
 
         system_tree.insert(sys, 'end', text=num, values=(hab, rp, srp, owner, turn))
+    #}
 
-    #text.insert('end', f"Click {key}\n")
 
 def drawDb() -> None:
     """ Read the database and draw it """
@@ -155,7 +164,7 @@ def drawDb() -> None:
                 #foreach world
             #if survey data
 
-            canvas.create_text(x + side / 2, y + side / 2, text=star_type, fill=fill_color, tags=tags)
+            canvas.create_text(x + side / 2, y + side / 2, text=star_type, fill=fill_color, tags=['icon'])
         #if text is visible
     #foreach star
 
