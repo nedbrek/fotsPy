@@ -123,7 +123,7 @@ def drawDb() -> None:
     first_x = int(getDbVal(cur, "first_x"))
     first_y = int(getDbVal(cur, "first_y"))
 
-    # TODO pull data from db
+    # pull data from db
     stars = cur.execute('SELECT gridx, gridy, type FROM starmap').fetchall()
     for row in stars:
         xoff = row[0]
@@ -133,7 +133,10 @@ def drawDb() -> None:
         star_type = row[2]
 
         fill_color = 'black'
-        grid_res = cur.execute('SELECT color FROM comm_grid WHERE gridx=? AND gridy=?', (xoff, yoff)).fetchone()
+        grid_res = cur.execute("""SELECT color
+            FROM comm_grid WHERE gridx=? AND gridy=?
+            ORDER BY turn DESC LIMIT 1
+        """, (xoff, yoff)).fetchone()
         if grid_res is not None:
             fill_color = "#{}".format(grid_res[0][2:])
 
@@ -294,14 +297,16 @@ def insertSurveys(conn, data, turn) -> None:
     expect_turn = 0 if turn == 0 else turn - 1
     for star in data.stars:
     #{
-        if not hasattr(star, "last_survey") or star.last_survey != expect_turn:
-            continue
-
         if star.grid:
-            cur.execute("""
-                INSERT INTO comm_grid(gridx, gridy, color, turn)
-                VALUES(?, ?, ?, ?)
-            """, (star.xoff, star.yoff, star.grid, turn))
+            grid_res = cur.execute("""SELECT color FROM comm_grid
+                WHERE gridx=? AND gridy=?
+            """, (star.xoff, star.yoff)).fetchone()
+            if grid_res is None or grid_res[0] != star.grid:
+                cur.execute("""
+                    INSERT INTO comm_grid(gridx, gridy, color, turn)
+                    VALUES(?, ?, ?, ?)
+                """, (star.xoff, star.yoff, star.grid, turn))
+                # TODO? update turn?
 
         world_num = 1
         for w in star.worlds:

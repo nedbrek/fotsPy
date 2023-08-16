@@ -150,11 +150,15 @@ class Fots:
                 # TODO? check survey stamps?
                 continue
 
+            num_cols = len(cols)
+            if num_cols == 1:
+                print("NedC1 {} '{}'".format(s.key, c))
+                continue
+
             if cols[1][0] != '#':
                 #print("NedS {} '{}'".format(s.key, c))
                 continue
 
-            num_cols = len(cols)
             if num_cols == 2:
                 print("NedC2 {} '{}'".format(s.key, c))
                 continue
@@ -290,7 +294,10 @@ class Fots:
                     com_cols = comments[0].split()
                     if key != com_cols[0]:
                         print("Ned error ", key, com_cols[0], file=sys.stderr)
-                    s.star_type = com_cols[1]
+                    if len(com_cols) < 2:
+                        print("Ned error {} {} {}".format(key, com_cols[0], comments[0]), file=sys.stderr)
+                    else:
+                        s.star_type = com_cols[1]
                     self.parseComments(s, comments)
 
                 self.stars.append(s)
