@@ -2,6 +2,7 @@
 
 from enum import Enum, auto
 import fots_lib as fots
+import fots_db
 import json
 import openpyxl
 import re
@@ -198,71 +199,6 @@ def zoomIn(event) -> None:
     drawDb()
 
 ### db functions
-def insertHabs(conn, habs) -> None:
-    """ Insert the key/value pairs from 'habs' (dict) into the database cursor 'cur' """
-    cur = conn.cursor()
-    for key, val in habs.habs.items():
-        cur.execute("""
-            INSERT OR REPLACE INTO hab_data(key, val)
-            VALUES(?, ?)
-        """, (key, val))
-    conn.commit()
-
-def insertStarmap(conn, data):
-    """ Insert the values from 'habs' (list) into the database cursor 'cur' """
-    cur = conn.cursor()
-    for star in data.stars:
-        cur.execute("""
-            INSERT INTO starmap(gridx, gridy, type)
-            VALUES (?, ?, ?)
-        """, (star.xoff, star.yoff, star.star_type))
-    conn.commit()
-
-def buildDb(conn):
-    """ Create initial database tables """
-    cur = conn.cursor()
-    cur.executescript("""
-        CREATE TABLE settings(
-            version INTEGER
-        );
-        CREATE TABLE starmap(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            gridx INTEGER not null,
-            gridy INTEGER not null,
-            type TEXT not null
-        );
-        CREATE TABLE hab_data(
-            key TEXT PRIMARY KEY,
-            val TEXT not null
-        );
-        CREATE TABLE surveys(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            key TEXT not null,
-            num INTEGER not null,
-            type TEXT not null,
-            rp INTEGER not null,
-            srp INTEGER not null,
-            owner TEXT not null,
-            turn INTEGER not null
-        );
-        CREATE TABLE comm_grid(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            gridx INTEGER not null,
-            gridy INTEGER not null,
-            color TEXT not null,
-            turn INTEGER not null
-        );
-        CREATE TABLE notes(
-            key TEXT PRIMARY KEY,
-            val TEXT not NULL
-        )
-    """)
-
-    cur.execute("""
-        INSERT INTO settings(version) VALUES(1)
-    """)
-    conn.commit()
-
 def addExcel(root) -> None:
     """ Ask user for an Excel file to read into the db """
     #{
@@ -283,47 +219,12 @@ def addExcel(root) -> None:
     col = 12
     turn = summary_sheet.cell(row, col).value
 
-    insertSurveys(conn, data, turn)
+    fots_db.insertSurveys(conn, data, turn)
 
     drawDb()
     # TODO pull database name
     root.winfo_toplevel().title("Fots turn {}".format(turn))
     #}
-
-def insertSurveys(conn, data, turn) -> None:
-    """ Insert the planet data into the database cursor """
-    cur = conn.cursor()
-    # surveys are tagged with the previous turn (except turn 0)
-    expect_turn = 0 if turn == 0 else turn - 1
-    for star in data.stars:
-    #{
-        if star.grid:
-            grid_res = cur.execute("""SELECT color FROM comm_grid
-                WHERE gridx=? AND gridy=?
-            """, (star.xoff, star.yoff)).fetchone()
-            if grid_res is None or grid_res[0] != star.grid:
-                cur.execute("""
-                    INSERT INTO comm_grid(gridx, gridy, color, turn)
-                    VALUES(?, ?, ?, ?)
-                """, (star.xoff, star.yoff, star.grid, turn))
-                # TODO? update turn?
-
-        world_num = 1
-        for w in star.worlds:
-        #{
-            owner = ""
-            if hasattr(w, "owner"):
-                owner = w.owner
-
-            cur.execute("""
-                INSERT INTO surveys(key, num, type, rp, srp, owner, turn)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
-            """, (star.key, world_num, w.type, w.rp, w.srp, owner, turn))
-
-            world_num = world_num + 1
-        #} for world
-    #} for star
-    conn.commit()
 
 def getDbVal(cur, key, col="val", table="notes"):
     res = cur.execute("SELECT {} FROM {} WHERE key=?".format(col, table), (key,))
@@ -394,7 +295,6 @@ def newDb(root):
 
     global conn
     conn = sqlite3.connect(filename)
-    cur = conn.cursor()
 
     wb_obj = openpyxl.load_workbook(excel_file)
 
@@ -403,25 +303,22 @@ def newDb(root):
     data = fots.Fots()
     data.buildStarmap(map_sheet)
 
-    buildDb(conn)
+    # create tables
+    fots_db.buildDb(conn)
 
-    # the argument to insert must be a tuple
-    cur.execute("INSERT INTO notes VALUES('first_x', ?)", (data.first_x,))
-    cur.execute("INSERT INTO notes VALUES('first_y', ?)", (data.first_y,))
-    conn.commit()
-
-    insertStarmap(conn, data)
+    # populate starmap
+    fots_db.insertStarmap(conn, data)
 
     habs = fots.Habs()
     habs.readExcel(wb_obj)
-    insertHabs(conn, habs)
+    fots_db.insertHabs(conn, habs)
 
     summary_sheet = wb_obj["Summary"]
     row = 7
     col = 12
     turn = summary_sheet.cell(row, col).value
 
-    insertSurveys(conn, data, turn)
+    fots_db.insertSurveys(conn, data, turn)
 
     drawDb()
     root.winfo_toplevel().title("Fots {} turn {}".format(filename, turn))
