@@ -24,7 +24,18 @@ def buildDb(conn) -> None:
             type TEXT not null,
             rp INTEGER not null,
             srp INTEGER not null,
+            ssrp INTEGER not null,
             owner TEXT not null,
+            turn INTEGER not null
+        );
+        CREATE TABLE colonies(
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            key STRING not null,
+            rp INTEGER not null,
+            srp INTEGER not null,
+            ssrp INTEGER not null,
+            add_prod INTEGER not null,
+            pop_type STRING not null,
             turn INTEGER not null
         );
         CREATE TABLE comm_grid(
@@ -87,13 +98,20 @@ def insertSurveys(conn, data, turn) -> None:
                 owner = w.owner
 
             cur.execute("""
-                INSERT INTO surveys(key, num, type, rp, srp, owner, turn)
-                VALUES(?, ?, ?, ?, ?, ?, ?)
-            """, (star.key, world_num, w.type, w.rp, w.srp, owner, turn))
+                INSERT INTO surveys(key, num, type, rp, srp, ssrp, owner, turn)
+                VALUES(?, ?, ?, ?, ?, ?, ?, ?)
+            """, (star.key, world_num, w.type, w.rp, w.srp, w.ssrp, owner, turn))
 
             world_num = world_num + 1
         #} for world
     #} for star
+
+    for col in data.colonies:
+        cur.execute("""
+            INSERT INTO colonies(key, rp, srp, ssrp, add_prod, pop_type, turn)
+            VALUES(?, ?, ?, ?, ?, ?, ?)
+        """, (col.key, col.rp, col.srp, col.ssrp, col.add_prod, col.pop_type, turn))
+
     conn.commit()
 
 def insertHabs(conn, habs) -> None:

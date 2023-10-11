@@ -2,12 +2,19 @@ import openpyxl
 import re
 import sys
 
+### utilities
+def getXlVal(cell_val):
+    if cell_val is None:
+        return 0
+    return cell_val
+
 ### classes
 class World:
     def __init__(self):
         self.type = "<error>"
         self.rp = -1
         self.srp = -1
+        self.ssrp = -1
 
 def compareWorlds(key, w1, w2):
     if w1.type != w2.type:
@@ -18,6 +25,9 @@ def compareWorlds(key, w1, w2):
 
     if w1.srp != w2.srp:
         print("SRP mismatch {} {} {}".format(key, w1.srp, w2.srp))
+
+    if w1.ssrp != w2.ssrp:
+        print("SSRP mismatch {} {} {}".format(key, w1.ssrp, w2.ssrp))
 
     return # TODO check owner once we resolve the formula
     if hasattr(w1, 'owner'):
@@ -60,9 +70,14 @@ class Habs:
             self.habs[key_val] = hab_val
             row = row + 1
 
+class Colony:
+    def __init__(self):
+        self.key = None
+
 class Fots:
     def __init__(self):
         self.stars = list()
+        self.colonies = list()
 
     # excel util
     def resolveFormula(sheet, cell):
@@ -170,6 +185,7 @@ class Fots:
                 w.type = cols[2]
                 w.rp = int(cols[3])
                 w.srp = 0
+                w.ssrp = 0
                 last_survey = int(cols[4])
                 if cols[5] != "!":
                     print("NedC6 {} '{}'".format(s.key, c))
@@ -241,15 +257,18 @@ class Fots:
                     #desc = ' '.join(cols[3:last_col])
                     last_col = cols.index('Special:') - 2
                     w.srp = float(cols[i+1])
+                    w.ssrp = 0
                     last_col = last_col - 1
                 else:
                     regex = re.compile("Naturally")
                     if (regex.search(c)):
                         last_col = cols.index('Naturally') - 1
                         w.srp = float(cols[i+1])
+                        w.ssrp = 0
                         last_col = last_col - 1
                     else:
                         w.srp = 0
+                        w.ssrp = 0
 
                 w.rp = int(cols[i])
 
@@ -262,6 +281,25 @@ class Fots:
         #} # foreach line in comments
         # make sure worlds are in pnum order
         s.worlds.sort(key=lambda x:x.pnum)
+
+    def buildColonies(self, map_sheet):
+        row = 10
+        col = 1
+
+        val = map_sheet.cell(row, col).value
+        while val != None:
+            c = Colony()
+            c.key = val
+            c.rp   = getXlVal(map_sheet.cell(row, col+1).value)
+            c.srp  = getXlVal(map_sheet.cell(row, col+2).value)
+            c.ssrp = getXlVal(map_sheet.cell(row, col+3).value)
+            c.add_prod = getXlVal(map_sheet.cell(row, col+4).value)
+            c.pop_type = getXlVal(map_sheet.cell(row, col+13).value)
+
+            self.colonies.append(c)
+
+            row = row + 1
+            val = map_sheet.cell(row, col).value
 
     def buildStarmap(self, map_sheet):
         self.first_x, last_x = Fots.findX(map_sheet)
@@ -343,9 +381,10 @@ class Fots:
                         if srp_val is not None:
                             tmp_w.srp = float(srp_val)
 
+                        tmp_w.ssrp = 0
                         ssrp_val = survey_sheet.cell(row, ssrp_col).value
                         if ssrp_val is not None:
-                            tmp_w.srp = tmp_w.srp + float(ssrp_val)
+                            tmp_w.ssrp = float(ssrp_val)
 
                         # TODO resolve owner formula
                         #own_val = survey_sheet.cell(row, own_col).value

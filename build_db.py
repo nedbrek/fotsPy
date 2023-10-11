@@ -23,9 +23,14 @@ if __name__ == '__main__':
 
     print("Processing {}".format(sfiles[0]))
     wb_obj = openpyxl.load_workbook(sfiles[0])
-    map_sheet = wb_obj["Map"]
+
     data = fots.Fots()
+
+    map_sheet = wb_obj["Map"]
     data.buildStarmap(map_sheet)
+
+    col_sheet = wb_obj["Colonies"]
+    data.buildColonies(col_sheet)
 
     fots_db.buildDb(conn)
     fots_db.insertStarmap(conn, data)
@@ -44,9 +49,13 @@ if __name__ == '__main__':
     for excel_file in sfiles[1:]:
         print("Processing {}".format(excel_file))
         wb_obj = openpyxl.load_workbook(excel_file)
-        map_sheet = wb_obj["Map"]
         data = fots.Fots()
+
+        map_sheet = wb_obj["Map"]
         data.buildStarmap(map_sheet)
+
+        col_sheet = wb_obj["Colonies"]
+        data.buildColonies(col_sheet)
 
         summary_sheet = wb_obj["Summary"]
         row = 7

@@ -214,6 +214,9 @@ def addExcel(root) -> None:
     data = fots.Fots()
     data.buildStarmap(map_sheet)
 
+    col_sheet = wb_obj["Colonies"]
+    data.buildColonies(col_sheet)
+
     summary_sheet = wb_obj["Summary"]
     row = 7
     col = 12
